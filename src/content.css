@@ -1,0 +1,81 @@
+.peripheral-view-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ニコニコ動画はコメント層ごと縮小する。インラインの中央寄せも引き継ぐ */
+.peripheral-view-on [data-name='inner'] {
+  transform: translate(-50%, -50%) scale(var(--peripheral-view-scale)) !important;
+  transform-origin: center center;
+}
+
+/* Ambient light for YouTube も同じ要素に transform を指定するため !important で上書きする */
+.peripheral-view-on .html5-main-video {
+  transform: scale(var(--peripheral-view-scale)) !important;
+  transform-origin: center center !important;
+}
+
+.peripheral-view-on .ytp-caption-window-container {
+  transform: scale(var(--peripheral-view-scale));
+}
+
+/* Ambient light の同期用レイヤーは動画と同じ位置に重なるので、縮小とずれないように隠す */
+.peripheral-view-on .ambientlight__video-overlay,
+.peripheral-view-on .ambientlight__video-debanding {
+  display: none !important;
+}
+
+.peripheral-view-panel {
+  --peripheral-view-text: #f1f1f1;
+  --peripheral-view-muted: #aaaaaa;
+  --peripheral-view-border: #5a5a5a;
+  --peripheral-view-accent: #4fc3f7;
+  position: absolute;
+  right: 12px;
+  bottom: 72px;
+  z-index: 80;
+  box-sizing: border-box;
+  width: 300px;
+  max-height: calc(100% - 96px);
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: #181818;
+  color: var(--peripheral-view-text);
+  font: 13px/1.5 system-ui, sans-serif;
+}
+
+/* ニコニコ動画は操作バーが高いので、その上に出す */
+[data-name='stage'] > .peripheral-view-panel {
+  bottom: 112px;
+  max-height: calc(100% - 136px);
+}
+
+.peripheral-view-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.peripheral-view-panel-header button {
+  padding: 2px 12px;
+  border: 1px solid var(--peripheral-view-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.peripheral-view-button[aria-pressed='true'] svg path {
+  fill: #4fc3f7;
+}

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "peripheral-view",
+  "version": "0.3.0",
+  "description": "YouTubeとニコニコ動画の映像を周囲の壁へ投影し、映画館の多面上映のような3D空間で視聴します。",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "peripheral-view@extension",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "peripheral-viewの設定",
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://www.nicovideo.jp/*"],
+      "exclude_matches": ["https://www.youtube.com/live_chat*"],
+      "js": ["src/settings.js", "src/sites.js", "src/controls.js", "src/renderer.js", "src/content.js"],
+      "css": ["src/controls.css", "src/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

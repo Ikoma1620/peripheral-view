@@ -1,0 +1,70 @@
+/* 設定フォームの共通スタイル。色は置き場所ごとに --peripheral-view-* で指定する */
+.peripheral-view-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font: 13px/1.5 system-ui, sans-serif;
+  color: var(--peripheral-view-text);
+}
+
+.peripheral-view-choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.peripheral-view-choice legend {
+  padding: 0;
+}
+
+.peripheral-view-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 2px;
+}
+
+.peripheral-view-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.peripheral-view-option input {
+  margin: 0;
+  accent-color: var(--peripheral-view-accent);
+}
+
+.peripheral-view-slider {
+  display: block;
+}
+
+.peripheral-view-slider-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.peripheral-view-slider output {
+  color: var(--peripheral-view-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.peripheral-view-slider input {
+  display: block;
+  width: 100%;
+  margin: 4px 0 0;
+  accent-color: var(--peripheral-view-accent);
+}
+
+.peripheral-view-controls button {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--peripheral-view-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
