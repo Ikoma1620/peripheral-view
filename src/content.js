@@ -163,7 +163,7 @@
     button.className = `${PERIPHERAL_VIEW_SITE.buttonClass(fullscreenButton)} peripheral-view-button`;
     button.title = BUTTON_TITLE;
     button.setAttribute('aria-label', BUTTON_TITLE);
-    button.append(createIcon(fullscreenButton.querySelector('svg')));
+    button.append(createIcon(PERIPHERAL_VIEW_SITE.iconReference(fullscreenButton)));
     button.addEventListener('click', onButtonClick);
     fullscreenButton.parentElement.insertBefore(button, fullscreenButton);
     syncButton();
@@ -191,7 +191,8 @@
       if (!panel || event.target.closest?.('.peripheral-view-panel, .peripheral-view-button')) return;
       closePanel();
       // サイトのメニューと同じく、閉じるだけのクリックでは再生状態を変えない
-      if (!session?.player.contains(event.target) || event.target.closest('.ytp-chrome-bottom')) return;
+      const { controls } = PERIPHERAL_VIEW_SITE;
+      if (!session?.player.contains(event.target) || (controls && event.target.closest(controls))) return;
       const swallow = (click) => click.stopPropagation();
       document.addEventListener('click', swallow, true);
       document.addEventListener(
