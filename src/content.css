@@ -23,6 +23,22 @@
   transform: scale(var(--peripheral-view-scale));
 }
 
+/* bilibili は映像、弾幕、字幕をそれぞれ縮小する */
+.peripheral-view-on .bpx-player-video-perch,
+.peripheral-view-on .bpx-player-row-dm-wrap,
+.peripheral-view-on .bpx-player-subtitle-wrap {
+  transform: scale(var(--peripheral-view-scale));
+  transform-origin: center center;
+}
+
+/* bilibili の操作バーのボタンは<div>なので、<button>の既定の見た目を消す */
+.bpx-player-ctrl-btn.peripheral-view-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
 /* Ambient light の同期用レイヤーは動画と同じ位置に重なるので、縮小とずれないように隠す */
 .peripheral-view-on .ambientlight__video-overlay,
 .peripheral-view-on .ambientlight__video-debanding {
