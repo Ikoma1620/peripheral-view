@@ -1,4 +1,4 @@
-// 映像をテクスチャとして読み、中央スクリーンを囲む部屋（壁・床・天井）を描く
+// 映像をテクスチャとして読み、正面スクリーンを囲む部屋（壁・床・天井）を描く
 (() => {
   const VERTEX_SHADER = `#version 300 es
 out vec2 ndc;
@@ -20,6 +20,7 @@ uniform float strip;
 uniform float lod;
 uniform bool across;    // false: 左右の端を行ごとに平均、true: 上下の端を列ごとに平均
 uniform bool weighted;
+uniform vec2 crop;      // スクリーンに映っている範囲（映像全体に対する比率、中央基準）
 
 const int SAMPLES = 24;
 
@@ -31,7 +32,7 @@ void main() {
     float t = (float(i) + 0.5) / float(SAMPLES);
     float from = t * strip;
     float edge = (across ? p.y : p.x) < 0.5 ? from : 1.0 - from;
-    vec2 uv = across ? vec2(p.x, edge) : vec2(edge, p.y);
+    vec2 uv = 0.5 + ((across ? vec2(p.x, edge) : vec2(edge, p.y)) - 0.5) * crop;
     // 端に近いほど重くする。範囲の外側の重みは端の約5%まで下がる
     float weight = weighted ? exp(-3.0 * t) : 1.0;
     sum += textureLod(video, uv, lod).rgb * weight;
@@ -48,8 +49,10 @@ out vec4 color;
 uniform sampler2D video;
 uniform sampler2D sideEdges;
 uniform sampler2D acrossEdges;
-uniform vec2 front;      // 中央スクリーンの半分のサイズ（NDC）
-uniform float aspect;
+uniform vec2 front;      // 正面スクリーンの半分のサイズ（NDC）
+uniform vec2 picture;    // 正面スクリーン上で映像が映る範囲の半分のサイズ（NDC）
+uniform vec2 crop;
+uniform float aspect;    // スクリーンに映っている範囲の縦横比
 uniform float blurRange;
 uniform float brightness;
 uniform int screenCount;
@@ -73,37 +76,52 @@ float wallShade(float u, float across) {
 }
 
 void main() {
-  // 視点から中央スクリーン面までの距離を1とした部屋を、ピクセルごとの視線で解く
+  // 視点から正面スクリーン面までの距離を1とした部屋を、ピクセルごとの視線で解く
   // 1/距離 が線形になるので、遠近が正しくかかる
   vec2 q = ndc / front;
   vec2 a = abs(q);
-
-  // 中央スクリーンの部分は、前面にある本物の<video>が表示される
-  if (a.x <= 1.0 && a.y <= 1.0) {
-    color = vec4(0.0, 0.0, 0.0, 1.0);
-    return;
-  }
+  // スクリーン上の位置を、映像の範囲を ±1 とする座標に直す（余白の分は範囲外に出る）
+  vec2 toPicture = front / picture;
 
   vec3 result;
-  if (a.x >= a.y) {
+  if (a.x <= 1.0 && a.y <= 1.0) {
+    vec2 p = ndc / picture;
+    vec2 b = abs(p);
+    // 映像の部分は、前面にある本物の<video>が表示される
+    if (b.x <= 1.0 && b.y <= 1.0) {
+      color = vec4(0.0, 0.0, 0.0, 1.0);
+      return;
+    }
+    // 余白には、隣の壁との継ぎ目と同じ色を映像の端から延ばす
+    vec2 margin = (abs(ndc) - picture) / max(front - picture, vec2(1e-4));
+    if (margin.x >= margin.y) {
+      vec2 at = vec2(p.x < 0.0 ? 0.25 : 0.75, 0.5 - 0.5 * clamp(p.y, -1.0, 1.0));
+      result = blurred(sideEdges, at, vec2(0.0, blurRange)) * wallShade(0.0, q.y);
+    } else {
+      vec2 at = vec2(0.5 + 0.5 * clamp(p.x, -1.0, 1.0), p.y > 0.0 ? 0.25 : 0.75);
+      result = blurred(acrossEdges, at, vec2(blurRange / aspect, 0.0)) * wallShade(0.0, q.x);
+    }
+  } else if (a.x >= a.y) {
     // 左右の壁：u=0 がスクリーンとの継ぎ目、u=1 が画面の端
     float u = (1.0 - 1.0 / a.x) / (1.0 - front.x);
     float v = q.y / a.x;
-    vec2 at = vec2(q.x < 0.0 ? 0.25 : 0.75, 0.5 - 0.5 * v);
+    float row = clamp(v * toPicture.y, -1.0, 1.0);
+    vec2 at = vec2(q.x < 0.0 ? 0.25 : 0.75, 0.5 - 0.5 * row);
     result = blurred(sideEdges, at, vec2(0.0, blurRange)) * wallShade(u, v);
   } else {
     float u = (1.0 - 1.0 / a.y) / (1.0 - front.y);
     float s = q.x / a.y;
+    float column = clamp(s * toPicture.x, -1.0, 1.0);
     bool above = q.y > 0.0;
     if (screenCount >= (above ? 4 : 5)) {
       // 上下のスクリーン
-      vec2 at = vec2(0.5 + 0.5 * s, above ? 0.25 : 0.75);
+      vec2 at = vec2(0.5 + 0.5 * column, above ? 0.25 : 0.75);
       result = blurred(acrossEdges, at, vec2(blurRange / aspect, 0.0)) * wallShade(u, s);
     } else {
       // 床と天井：映像の上下端から光が回り込んだように、強くぼかして暗く映す
-      vec2 uv = vec2(0.5 + 0.5 * s, above ? u * 0.2 : 1.0 - u * 0.2);
+      vec2 uv = vec2(0.5 + 0.5 * column, above ? u * 0.2 : 1.0 - u * 0.2);
       float strength = above ? 0.14 : 0.3;
-      result = textureLod(video, uv, 6.0).rgb * strength * pow(1.0 - u, 1.3);
+      result = textureLod(video, 0.5 + (uv - 0.5) * crop, 6.0).rgb * strength * pow(1.0 - u, 1.3);
     }
   }
 
@@ -165,6 +183,8 @@ void main() {
       this.canvas = canvas;
       this.video = video;
       this.frontSize = [1, 1];
+      this.pictureSize = [1, 1];
+      this.crop = [1, 1];
       this.settings = null;
       this.running = false;
 
@@ -172,12 +192,14 @@ void main() {
       if (!gl) throw new Error('WebGL2 を利用できません');
       this.gl = gl;
 
-      this.edgePass = link(gl, EDGE_FRAGMENT_SHADER, ['video', 'strip', 'lod', 'across', 'weighted']);
+      this.edgePass = link(gl, EDGE_FRAGMENT_SHADER, ['video', 'strip', 'lod', 'across', 'weighted', 'crop']);
       this.roomPass = link(gl, ROOM_FRAGMENT_SHADER, [
         'video',
         'sideEdges',
         'acrossEdges',
         'front',
+        'picture',
+        'crop',
         'aspect',
         'blurRange',
         'brightness',
@@ -232,17 +254,23 @@ void main() {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
       gl.generateMipmap(gl.TEXTURE_2D);
 
-      const aspect = video.videoWidth / video.videoHeight;
+      // 切り取って映している場合は、その範囲を映像全体とみなす
+      const [cropX, cropY] = this.crop;
+      const visibleWidth = video.videoWidth * cropX;
+      const visibleHeight = video.videoHeight * cropY;
+      const aspect = visibleWidth / visibleHeight;
       const screenCount = SCREEN_COUNTS[settings.screens] ?? 3;
 
       gl.useProgram(edgePass.program);
       gl.uniform1i(edgePass.uniforms.video, 0);
       gl.uniform1i(edgePass.uniforms.weighted, settings.average === 'weighted' ? 1 : 0);
-      this.drawEdge(this.sideTarget, settings.strip, Math.log2(video.videoHeight / EDGE_SAMPLES), false);
-      if (screenCount > 3) {
+      gl.uniform2f(edgePass.uniforms.crop, cropX, cropY);
+      this.drawEdge(this.sideTarget, settings.strip, Math.log2(visibleHeight / EDGE_SAMPLES), false);
+      // 上下のスクリーンか、正面スクリーンの上下の余白に使う
+      if (screenCount > 3 || this.pictureSize[1] < this.frontSize[1]) {
         // 上下の端も左右と同じピクセル数を平均する
         const strip = Math.min(settings.strip * aspect, 0.5);
-        this.drawEdge(this.acrossTarget, strip, Math.log2(video.videoWidth / EDGE_SAMPLES), true);
+        this.drawEdge(this.acrossTarget, strip, Math.log2(visibleWidth / EDGE_SAMPLES), true);
       }
 
       gl.useProgram(roomPass.program);
@@ -252,6 +280,8 @@ void main() {
       gl.uniform1i(roomPass.uniforms.sideEdges, 1);
       gl.uniform1i(roomPass.uniforms.acrossEdges, 2);
       gl.uniform2f(roomPass.uniforms.front, this.frontSize[0], this.frontSize[1]);
+      gl.uniform2f(roomPass.uniforms.picture, this.pictureSize[0], this.pictureSize[1]);
+      gl.uniform2f(roomPass.uniforms.crop, cropX, cropY);
       gl.uniform1f(roomPass.uniforms.aspect, aspect);
       gl.uniform1f(roomPass.uniforms.blurRange, settings.blurRange);
       gl.uniform1f(roomPass.uniforms.brightness, settings.brightness);

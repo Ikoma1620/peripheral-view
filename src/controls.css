@@ -2,7 +2,7 @@
 .peripheral-view-controls {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   font: 13px/1.5 system-ui, sans-serif;
   color: var(--peripheral-view-text);
 }
@@ -20,7 +20,7 @@
 .peripheral-view-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 2px 14px;
   margin-top: 2px;
 }
 
@@ -34,6 +34,23 @@
 .peripheral-view-option input {
   margin: 0;
   accent-color: var(--peripheral-view-accent);
+}
+
+.peripheral-view-menu {
+  display: block;
+}
+
+.peripheral-view-menu select {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 2px;
+  padding: 3px 6px;
+  border: 1px solid var(--peripheral-view-border);
+  border-radius: 6px;
+  background: var(--peripheral-view-field);
+  color: inherit;
+  font: inherit;
 }
 
 .peripheral-view-slider {

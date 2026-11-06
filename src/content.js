@@ -10,20 +10,47 @@
   const updateLayout = () => {
     if (!session) return;
     const { player, video, renderer } = session;
-    if (!player.clientWidth || !player.clientHeight) return;
+    const { clientWidth: width, clientHeight: height } = player;
+    if (!width || !height) return;
     const { distance } = PERIPHERAL_VIEW_SEATS[settings.seat] ?? PERIPHERAL_VIEW_SEATS.front;
-    const scale = settings.size / distance;
-    // 実際の<video>をCSSで縮め、WebGL側の部屋をその大きさに合わせる
-    player.style.setProperty('--peripheral-view-scale', scale);
+    const box = settings.size / distance;
     renderer.settings = settings;
+
     // ニコニコ動画の<video>は枠いっぱいに広がるので、映像が実際に映る範囲を求める
     const fit = video.videoWidth
       ? Math.min(video.offsetWidth / video.videoWidth, video.offsetHeight / video.videoHeight)
       : 1;
-    renderer.frontSize = [
-      (scale * (video.videoWidth * fit || video.offsetWidth)) / player.clientWidth,
-      (scale * (video.videoHeight * fit || video.offsetHeight)) / player.clientHeight,
-    ];
+    const pictureWidth = video.videoWidth * fit || video.offsetWidth;
+    const pictureHeight = video.videoHeight * fit || video.offsetHeight;
+
+    // 映像の比率を変える場合は、上下か左右を切り取った範囲を映像とみなす
+    const contentRatio =
+      PERIPHERAL_VIEW_RATIOS[settings.videoRatio]?.ratio ?? pictureWidth / pictureHeight;
+    const contentWidth = Math.min(pictureWidth, pictureHeight * contentRatio);
+    const contentHeight = contentWidth / contentRatio;
+
+    // 正面スクリーンは、席に応じた大きさの枠に収まる、指定の比率の長方形
+    const ratio = PERIPHERAL_VIEW_RATIOS[settings.screenRatio]?.ratio ?? contentRatio;
+    const screenWidth = Math.min(width * box, height * box * ratio);
+    const screenHeight = screenWidth / ratio;
+
+    // 実際の<video>をCSSで縮め、映さない部分を隠す
+    const scale = (settings.fit === 'cover' ? Math.max : Math.min)(
+      screenWidth / contentWidth,
+      screenHeight / contentHeight
+    );
+    const visibleWidth = Math.min(screenWidth / scale, contentWidth);
+    const visibleHeight = Math.min(screenHeight / scale, contentHeight);
+    const cropped = visibleWidth < pictureWidth - 0.5 || visibleHeight < pictureHeight - 0.5;
+    const insetX = (video.offsetWidth - visibleWidth) / 2;
+    const insetY = (video.offsetHeight - visibleHeight) / 2;
+    player.style.setProperty('--peripheral-view-scale', scale);
+    player.style.setProperty('--peripheral-view-clip', cropped ? `inset(${insetY}px ${insetX}px)` : 'none');
+
+    // WebGL側の部屋をスクリーンの大きさに、壁の色を映っている範囲の端に合わせる
+    renderer.frontSize = [screenWidth / width, screenHeight / height];
+    renderer.pictureSize = [(visibleWidth * scale) / width, (visibleHeight * scale) / height];
+    renderer.crop = [visibleWidth / pictureWidth, visibleHeight / pictureHeight];
     renderer.draw();
   };
 
@@ -76,11 +103,16 @@
     video.removeEventListener('resize', updateLayout);
     player.classList.remove('peripheral-view-on');
     player.style.removeProperty('--peripheral-view-scale');
+    player.style.removeProperty('--peripheral-view-clip');
     canvas.remove();
     syncButton();
   };
 
   const toggle = () => {
+    if (!PERIPHERAL_VIEW_CONNECTED()) {
+      retire();
+      return;
+    }
     if (session) {
       const { enteredFullscreen } = session;
       deactivate();
@@ -128,7 +160,9 @@
 
   // 開始前のクリックは開始、動作中のクリックは設定パネルの開閉にする
   const onButtonClick = () => {
-    if (!session) {
+    if (!PERIPHERAL_VIEW_CONNECTED()) {
+      retire();
+    } else if (!session) {
       toggle();
     } else if (panel) {
       closePanel();
@@ -210,10 +244,23 @@
 
   // 操作バーや<video>はページ遷移などで作り直されるので、定期的に確認する
   const checkPage = () => {
+    if (!PERIPHERAL_VIEW_CONNECTED()) {
+      retire();
+      return;
+    }
     if (session && !session.video.isConnected) deactivate();
     ensureButton();
   };
-  setInterval(checkPage, 2000);
+  const timer = setInterval(checkPage, 2000);
+
+  // 拡張機能が更新されたら、古いスクリプトのボタンと表示を片付けて止める
+  // 再読み込みしたタブでは、新しいスクリプトが改めて動く
+  const retire = () => {
+    clearInterval(timer);
+    deactivate();
+    document.querySelector('.peripheral-view-button')?.remove();
+  };
+
   checkPage();
 
   PERIPHERAL_VIEW_API.storage.local.get(PERIPHERAL_VIEW_DEFAULTS).then((stored) => {

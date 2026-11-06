@@ -19,6 +19,14 @@
   transform-origin: center center !important;
 }
 
+/* 「切り取って埋める」では、正面スクリーンからはみ出す映像とコメントを隠す */
+.peripheral-view-on [data-name='inner'],
+.peripheral-view-on .html5-main-video,
+.peripheral-view-on .bpx-player-video-perch,
+.peripheral-view-on .bpx-player-row-dm-wrap {
+  clip-path: var(--peripheral-view-clip, none);
+}
+
 .peripheral-view-on .ytp-caption-window-container {
   transform: scale(var(--peripheral-view-scale));
 }
@@ -50,6 +58,8 @@
   --peripheral-view-muted: #aaaaaa;
   --peripheral-view-border: #5a5a5a;
   --peripheral-view-accent: #4fc3f7;
+  --peripheral-view-field: #262626;
+  color-scheme: dark;
   position: absolute;
   right: 12px;
   bottom: 72px;
@@ -65,10 +75,10 @@
   font: 13px/1.5 system-ui, sans-serif;
 }
 
-/* ニコニコ動画は操作バーが高いので、その上に出す */
+/* ニコニコ動画は操作バーと、その上に出るコメント量の波形が重なるので、さらに上に出す */
 [data-name='stage'] > .peripheral-view-panel {
-  bottom: 112px;
-  max-height: calc(100% - 136px);
+  bottom: 168px;
+  max-height: calc(100% - 180px);
 }
 
 .peripheral-view-panel-header {

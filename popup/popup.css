@@ -5,6 +5,7 @@
   --peripheral-view-muted: #616161;
   --peripheral-view-border: #d0d0d0;
   --peripheral-view-accent: #0277bd;
+  --peripheral-view-field: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -14,6 +15,7 @@
     --peripheral-view-muted: #aaaaaa;
     --peripheral-view-border: #4a4a4a;
     --peripheral-view-accent: #4fc3f7;
+    --peripheral-view-field: #2a2a2a;
   }
 }
 

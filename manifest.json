@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "peripheral-view",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "YouTube、ニコニコ動画、bilibiliの映像を周囲の壁へ投影し、映画館の多面上映のような3D空間で視聴します。",
   "browser_specific_settings": {
     "gecko": {
