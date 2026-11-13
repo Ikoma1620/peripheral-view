@@ -57,6 +57,11 @@
   display: block;
 }
 
+/* 今の設定では使わない項目は隠す */
+.peripheral-view-controls [hidden] {
+  display: none;
+}
+
 .peripheral-view-slider-label {
   display: flex;
   justify-content: space-between;
@@ -84,4 +89,80 @@
   color: inherit;
   font: inherit;
   cursor: pointer;
+}
+
+/* 見た目「劇場」の座席表 */
+.peripheral-view-seatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* YouTube はプレーヤーの中の svg すべてに pointer-events: none を指定しているので、押せるように戻す */
+.peripheral-view-controls .peripheral-view-seatmap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: auto !important;
+}
+
+.peripheral-view-controls .peripheral-view-seatmap .peripheral-view-seat {
+  pointer-events: all !important;
+}
+
+.peripheral-view-seatmap-room {
+  fill: none;
+  stroke: var(--peripheral-view-border);
+  stroke-width: 8;
+}
+
+.peripheral-view-seatmap-wall {
+  fill: var(--peripheral-view-border);
+}
+
+.peripheral-view-seatmap-wall-line {
+  stroke: var(--peripheral-view-border);
+  stroke-width: 20;
+}
+
+.peripheral-view-seatmap-screen {
+  fill: var(--peripheral-view-text);
+}
+
+.peripheral-view-seatmap-label {
+  fill: var(--peripheral-view-muted);
+  font-size: 44px;
+}
+
+.peripheral-view-seat {
+  fill: var(--peripheral-view-field);
+  stroke: var(--peripheral-view-muted);
+  stroke-width: 5;
+  cursor: pointer;
+}
+
+/* 幅の広い席と車椅子スペース */
+.peripheral-view-seat-1 {
+  stroke-width: 9;
+}
+
+.peripheral-view-seat-2 {
+  stroke-dasharray: 14 10;
+}
+
+.peripheral-view-seat:hover,
+.peripheral-view-seat:focus-visible {
+  stroke: var(--peripheral-view-accent);
+  stroke-width: 12;
+  outline: none;
+}
+
+.peripheral-view-seat-current {
+  fill: var(--peripheral-view-accent);
+  stroke: var(--peripheral-view-accent);
+}
+
+.peripheral-view-seatmap-status {
+  color: var(--peripheral-view-muted);
+  font-size: 12px;
 }

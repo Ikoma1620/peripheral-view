@@ -7,13 +7,30 @@
   let session = null;
   let panel = null;
 
+  // 全画面でも見えるよう、プレーヤーの中に短いお知らせを出す
+  let messageTimer = 0;
+  const showMessage = (text, duration = 6000) => {
+    let element = document.querySelector('.peripheral-view-message');
+    if (!element) {
+      element = document.createElement('div');
+      element.className = 'peripheral-view-message';
+      element.setAttribute('role', 'status');
+    }
+    (session?.player ?? document.body).append(element);
+    element.textContent = text;
+    clearTimeout(messageTimer);
+    messageTimer = setTimeout(() => element.remove(), duration);
+  };
+
   const updateLayout = () => {
     if (!session) return;
     const { player, video, renderer } = session;
     const { clientWidth: width, clientHeight: height } = player;
     if (!width || !height) return;
     const { distance } = PERIPHERAL_VIEW_SEATS[settings.seat] ?? PERIPHERAL_VIEW_SEATS.front;
-    const box = settings.size / distance;
+    // 見た目「劇場」では、前方席の正面から見た大きさで画角を決め、席ごとの見え方はカメラで作る
+    const theater = PeripheralViewTheater.enabled(settings);
+    const box = theater ? settings.size : settings.size / distance;
     renderer.settings = settings;
 
     // ニコニコ動画の<video>は枠いっぱいに広がるので、映像が実際に映る範囲を求める
@@ -45,10 +62,16 @@
     const insetX = (video.offsetWidth - visibleWidth) / 2;
     const insetY = (video.offsetHeight - visibleHeight) / 2;
     player.style.setProperty('--peripheral-view-scale', scale);
+    // 「劇場」では、選んだ席から正面スクリーンの中心を見たときの見え方に合わせて、映像を斜めにする
+    const frontSize = [screenWidth / width, screenHeight / height];
+    const transform = theater
+      ? PeripheralViewTheater.videoTransform({ settings, frontSize, width, height, scale, screenWidth, screenHeight })
+      : `scale(${scale})`;
+    player.style.setProperty('--peripheral-view-transform', transform);
     player.style.setProperty('--peripheral-view-clip', cropped ? `inset(${insetY}px ${insetX}px)` : 'none');
 
     // WebGL側の部屋をスクリーンの大きさに、壁の色を映っている範囲の端に合わせる
-    renderer.frontSize = [screenWidth / width, screenHeight / height];
+    renderer.frontSize = frontSize;
     renderer.pictureSize = [(visibleWidth * scale) / width, (visibleHeight * scale) / height];
     renderer.crop = [visibleWidth / pictureWidth, visibleHeight / pictureHeight];
     renderer.draw();
@@ -76,7 +99,8 @@
       return false;
     }
 
-    const redraw = () => session?.renderer.draw();
+    // シークなどの後のフレームは前の映像とつながらない
+    const redraw = () => session?.renderer.draw({ reset: true });
     const observer = new ResizeObserver(updateLayout);
     observer.observe(player);
     observer.observe(video);
@@ -96,6 +120,7 @@
     closePanel();
     const { player, video, canvas, renderer, observer, redraw } = session;
     session = null;
+    document.querySelector('.peripheral-view-message')?.remove();
     renderer.stop();
     renderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
     observer.disconnect();
@@ -103,6 +128,7 @@
     video.removeEventListener('resize', updateLayout);
     player.classList.remove('peripheral-view-on');
     player.style.removeProperty('--peripheral-view-scale');
+    player.style.removeProperty('--peripheral-view-transform');
     player.style.removeProperty('--peripheral-view-clip');
     canvas.remove();
     syncButton();
@@ -152,7 +178,17 @@
     exit.addEventListener('click', toggle);
     header.append(title, exit);
 
-    const controls = createPeripheralViewControls();
+    // ファイルを選ぶ窓を開くと全画面が解除されることがあるので、その間の解除は終了として扱わない
+    const controls = createPeripheralViewControls({
+      theaterFile: {
+        onOpen: () => {
+          if (session) session.pickingUntil = performance.now() + 120000;
+        },
+        onClose: () => {
+          if (session) session.pickingUntil = performance.now() + 1500;
+        },
+      },
+    });
     element.append(header, controls.element);
     session.player.append(element);
     panel = { element, controls };
@@ -164,6 +200,10 @@
       retire();
     } else if (!session) {
       toggle();
+    } else if (session.awaitingFullscreen && !document.fullscreenElement) {
+      session.awaitingFullscreen = false;
+      session.enteredFullscreen = true;
+      PERIPHERAL_VIEW_SITE.fullscreenButton(session.player)?.click();
     } else if (panel) {
       closePanel();
     } else {
@@ -239,8 +279,21 @@
   );
 
   document.addEventListener('fullscreenchange', () => {
-    if (session && !document.fullscreenElement) deactivate();
+    if (!session) return;
+    if (document.fullscreenElement) {
+      session.awaitingFullscreen = false;
+      return;
+    }
+    if (performance.now() < (session.pickingUntil ?? 0)) {
+      session.awaitingFullscreen = true;
+      showMessage('もう一度 peripheral-view のボタンを押すと全画面に戻ります。');
+      return;
+    }
+    deactivate();
   });
+
+  // ページを離れるときは終了する
+  window.addEventListener('pagehide', () => deactivate());
 
   // 操作バーや<video>はページ遷移などで作り直されるので、定期的に確認する
   const checkPage = () => {
@@ -262,6 +315,9 @@
   };
 
   checkPage();
+
+  // 座席表を読み終えたときと、このページで別のシアターを読み込んだときは、配置を決め直す
+  PeripheralViewTheater.onChange(() => updateLayout());
 
   PERIPHERAL_VIEW_API.storage.local.get(PERIPHERAL_VIEW_DEFAULTS).then((stored) => {
     settings = stored;

@@ -72,20 +72,56 @@ vec3 blurred(sampler2D map, vec2 at, vec2 range) {
 }
 
 float wallShade(float u, float across) {
-  return mix(1.0, 0.3, pow(u, 1.4)) * (1.0 - 0.45 * pow(abs(across), 3.0));
+  return mix(1.0, 0.3, pow(u, 1.4)) * (1.0 - 0.45 * pow(min(abs(across), 1.0), 3.0));
 }
-
+${PeripheralViewTheater.GLSL}
 void main() {
   // 視点から正面スクリーン面までの距離を1とした部屋を、ピクセルごとの視線で解く
   // 1/距離 が線形になるので、遠近が正しくかかる
-  vec2 q = ndc / front;
+  vec2 view = ndc;
+  // 劇場では、選んだ席から正面スクリーンの中心を見る。視点は中心からずれ、スクリーンは斜めに見える
+  bool theater = uTheater > 0.5;
+  // 正面スクリーン面の上の位置（正面から見たときの NDC に直したもの）
+  vec2 rel = view;
+  // facing が負の画素は、スクリーンと逆の向き（真横より後ろ）を見ている
+  float facing = 1.0;
+  if (theater) {
+    vec3 h = uTheaterView * vec3(view, 1.0);
+    facing = h.z < 0.0 ? -1.0 : 1.0;
+    rel = h.xy / (facing * max(abs(h.z), 1e-4)) * front;
+  }
+  vec2 eye = theater ? uTheaterEye.xy : vec2(0.0);
+  // q は視線。スクリーンの中心から見た位置は eye + q * t
+  vec2 q = rel / front - eye;
   vec2 a = abs(q);
   // スクリーン上の位置を、映像の範囲を ±1 とする座標に直す（余白の分は範囲外に出る）
   vec2 toPicture = front / picture;
 
+  // 視線が当たる面と、その奥行き t（正面スクリーン面が1、視点が0）
+  int surface;
+  float t;
+  float along = 0.0;
+  if (theater) {
+    theaterSurface(q, facing, screenCount, surface, t, along);
+  } else if (a.x <= 1.0 && a.y <= 1.0) {
+    surface = S_SCREEN;
+    t = 1.0;
+  } else if (a.x >= a.y) {
+    surface = S_WALL;
+    t = 1.0 / a.x;
+  } else {
+    surface = q.y > 0.0 ? S_CEILING : S_FLOOR;
+    t = 1.0 / a.y;
+  }
+  // 劇場の模様と座席の輪郭をなめらかにするための、1ピクセルの大きさ
+  vec2 pixel = fwidth(q);
+  float fw = fwidth(t) * uTheaterScale.z;
+  // 劇場の中を照らす、映像全体の平均の色
+  vec3 light = theater ? textureLod(video, vec2(0.5), 9.0).rgb : vec3(0.0);
+
   vec3 result;
-  if (a.x <= 1.0 && a.y <= 1.0) {
-    vec2 p = ndc / picture;
+  if (surface == S_SCREEN) {
+    vec2 p = rel / picture;
     vec2 b = abs(p);
     // 映像の部分は、前面にある本物の<video>が表示される
     if (b.x <= 1.0 && b.y <= 1.0) {
@@ -93,26 +129,41 @@ void main() {
       return;
     }
     // 余白には、隣の壁との継ぎ目と同じ色を映像の端から延ばす
-    vec2 margin = (abs(ndc) - picture) / max(front - picture, vec2(1e-4));
+    vec2 on = rel / front;
+    vec2 margin = (abs(rel) - picture) / max(front - picture, vec2(1e-4));
     if (margin.x >= margin.y) {
       vec2 at = vec2(p.x < 0.0 ? 0.25 : 0.75, 0.5 - 0.5 * clamp(p.y, -1.0, 1.0));
-      result = blurred(sideEdges, at, vec2(0.0, blurRange)) * wallShade(0.0, q.y);
+      result = blurred(sideEdges, at, vec2(0.0, blurRange)) * wallShade(0.0, on.y);
     } else {
       vec2 at = vec2(0.5 + 0.5 * clamp(p.x, -1.0, 1.0), p.y > 0.0 ? 0.25 : 0.75);
-      result = blurred(acrossEdges, at, vec2(blurRange / aspect, 0.0)) * wallShade(0.0, q.x);
+      result = blurred(acrossEdges, at, vec2(blurRange / aspect, 0.0)) * wallShade(0.0, on.x);
     }
-  } else if (a.x >= a.y) {
-    // 左右の壁：u=0 がスクリーンとの継ぎ目、u=1 が画面の端
-    float u = (1.0 - 1.0 / a.x) / (1.0 - front.x);
-    float v = q.y / a.x;
+  } else if (surface == S_WALL) {
+    // 左右の壁：u=0 がスクリーンとの継ぎ目、u=1 が描く範囲の端
+    // 劇場では壁が斜めのスクリーンから始まるので、面に沿った距離で測る。席を替えても壁の同じ所に同じ映像を映す
+    float tw = theater ? theaterWallT(along, 1.0 - front.x) : t;
+    float u = (1.0 - tw) / (1.0 - front.x);
+    if (theater) u = min(u, 1.0);
+    float v = eye.y + q.y * t;
     float row = clamp(v * toPicture.y, -1.0, 1.0);
-    vec2 at = vec2(q.x < 0.0 ? 0.25 : 0.75, 0.5 - 0.5 * row);
+    bool left = q.x * facing < 0.0;
+    vec2 at = vec2(left ? 0.25 : 0.75, 0.5 - 0.5 * row);
     result = blurred(sideEdges, at, vec2(0.0, blurRange)) * wallShade(u, v);
+    if (theater) {
+      float aa = max(fw, pixel.y * t * uTheaterScale.y);
+      result = theaterWall(result, v, t, along, light, aa);
+      // プロジェクターのレンズは、向かいの壁へ映している映像の色で光る
+      vec3 lens = blurred(sideEdges, vec2(left ? 0.75 : 0.25, 0.5), vec2(0.0, 0.3));
+      result = theaterProjector(result, v, t, theaterProjectorDepth(t), screenCount, lens, light, aa);
+    }
+  } else if (surface == S_FRONT) {
+    result = theaterFront(eye + q, light);
   } else {
-    float u = (1.0 - 1.0 / a.y) / (1.0 - front.y);
-    float s = q.x / a.y;
+    float u = (1.0 - t) / (1.0 - front.y);
+    if (theater) u = min(u, 1.0);
+    float s = eye.x + q.x * t;
     float column = clamp(s * toPicture.x, -1.0, 1.0);
-    bool above = q.y > 0.0;
+    bool above = surface == S_CEILING;
     if (screenCount >= (above ? 4 : 5)) {
       // 上下のスクリーン
       vec2 at = vec2(0.5 + 0.5 * column, above ? 0.25 : 0.75);
@@ -122,8 +173,10 @@ void main() {
       vec2 uv = vec2(0.5 + 0.5 * column, above ? u * 0.2 : 1.0 - u * 0.2);
       float strength = above ? 0.14 : 0.3;
       result = textureLod(video, 0.5 + (uv - 0.5) * crop, 6.0).rgb * strength * pow(1.0 - u, 1.3);
+      if (theater) result = above ? theaterCeiling(result, s, t, fw, pixel.x) : theaterFloor(result, s, t, fw, pixel.x);
     }
   }
+  if (theater) result = theaterSeats(result, q, facing, pixel, light);
 
   // なだらかな暗部に縞が出ないよう、わずかにノイズを混ぜる
   float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
@@ -187,6 +240,9 @@ void main() {
       this.crop = [1, 1];
       this.settings = null;
       this.running = false;
+      this.motion = null; // 描画方式「動きに追従」を初めて選んだときに作る
+      this.motionActive = false;
+      this.motionFailed = false;
 
       const gl = canvas.getContext('webgl2', { alpha: false, antialias: false });
       if (!gl) throw new Error('WebGL2 を利用できません');
@@ -204,6 +260,16 @@ void main() {
         'blurRange',
         'brightness',
         'screenCount',
+        'uTheater',
+        'uTheaterView',
+        'uTheaterScale',
+        'uTheaterEye',
+        'uTheaterRoom',
+        'uTheaterFloor',
+        'uTheaterPart',
+        'uTheaterRows',
+        'uTheaterSegs',
+        'uTheaterSegInfo',
       ]);
 
       gl.bindVertexArray(gl.createVertexArray());
@@ -218,7 +284,7 @@ void main() {
       this.draw();
       const onFrame = () => {
         if (!this.running) return;
-        this.draw();
+        this.draw({ advance: true });
         this.video.requestVideoFrameCallback(onFrame);
       };
       this.video.requestVideoFrameCallback(onFrame);
@@ -239,7 +305,8 @@ void main() {
     }
 
     // 一時停止中は新しいフレームが来ないので、変更時はここを直接呼ぶ
-    draw() {
+    // advance は新しいフレームが来たとき、reset はシークなどで前の映像とつながらないとき
+    draw({ advance = false, reset = false } = {}) {
       const { gl, video, canvas, settings, edgePass, roomPass } = this;
       if (!video.videoWidth) return;
 
@@ -261,6 +328,14 @@ void main() {
       const aspect = visibleWidth / visibleHeight;
       const screenCount = SCREEN_COUNTS[settings.screens] ?? 3;
 
+      if (
+        settings.renderMode === 'motion' &&
+        this.drawMotion({ advance, reset, screenCount, width, height })
+      ) {
+        return;
+      }
+      this.motionActive = false;
+
       gl.useProgram(edgePass.program);
       gl.uniform1i(edgePass.uniforms.video, 0);
       gl.uniform1i(edgePass.uniforms.weighted, settings.average === 'weighted' ? 1 : 0);
@@ -274,8 +349,6 @@ void main() {
       }
 
       gl.useProgram(roomPass.program);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, width, height);
       gl.uniform1i(roomPass.uniforms.video, 0);
       gl.uniform1i(roomPass.uniforms.sideEdges, 1);
       gl.uniform1i(roomPass.uniforms.acrossEdges, 2);
@@ -286,7 +359,58 @@ void main() {
       gl.uniform1f(roomPass.uniforms.blurRange, settings.blurRange);
       gl.uniform1f(roomPass.uniforms.brightness, settings.brightness);
       gl.uniform1i(roomPass.uniforms.screenCount, screenCount);
+      const theater = this.theaterFrame(width, height);
+      gl.uniform1f(roomPass.uniforms.uTheater, theater.enabled ? 1 : 0);
+      gl.uniformMatrix3fv(roomPass.uniforms.uTheaterView, false, theater.view);
+      gl.uniform4fv(roomPass.uniforms.uTheaterScale, theater.scale);
+      gl.uniform4fv(roomPass.uniforms.uTheaterEye, theater.eye);
+      gl.uniform4fv(roomPass.uniforms.uTheaterRoom, theater.room);
+      gl.uniform4fv(roomPass.uniforms.uTheaterFloor, theater.floors);
+      gl.uniform4fv(roomPass.uniforms.uTheaterPart, theater.parts);
+      gl.uniform4fv(roomPass.uniforms.uTheaterRows, theater.rows);
+      gl.uniform4fv(roomPass.uniforms.uTheaterSegs, theater.segments);
+      gl.uniform4fv(roomPass.uniforms.uTheaterSegInfo, theater.segmentInfo);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, width, height);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    // 見た目「劇場」で描くための寸法と、選んだ席から見た座席の並び
+    theaterFrame(width, height) {
+      return PeripheralViewTheater.frame({
+        settings: this.settings,
+        frontSize: this.frontSize,
+        width,
+        height,
+      });
+    }
+
+    // 描けなかった場合は false を返し、従来の描画に戻す
+    drawMotion({ advance, reset, screenCount, width, height }) {
+      if (this.motionFailed) return false;
+      try {
+        this.motion ??= new PeripheralViewMotion(this.gl);
+        // 従来の描画から切り替えたときは、前の解析を引き継がない
+        if (!this.motionActive) this.motion.resetAll();
+        this.motionActive = true;
+        const frame = {
+          video: this.video,
+          crop: this.crop,
+          frontSize: this.frontSize,
+          pictureSize: this.pictureSize,
+          settings: this.settings,
+          screenCount,
+          theater: this.theaterFrame(width, height),
+        };
+        this.motion.process({ ...frame, advance, reset });
+        this.motion.drawRoom({ ...frame, width, height });
+        return true;
+      } catch (error) {
+        console.warn('[peripheral-view]', error);
+        this.motionFailed = true;
+        this.gl.activeTexture(this.gl.TEXTURE0);
+        return false;
+      }
     }
   }
 

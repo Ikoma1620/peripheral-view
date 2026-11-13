@@ -7,15 +7,16 @@
   pointer-events: none;
 }
 
+/* --peripheral-view-transform は、ふだんは縮小だけ。見た目「劇場」では、席から見た向きに合わせて斜めにする */
 /* ニコニコ動画はコメント層ごと縮小する。インラインの中央寄せも引き継ぐ */
 .peripheral-view-on [data-name='inner'] {
-  transform: translate(-50%, -50%) scale(var(--peripheral-view-scale)) !important;
+  transform: translate(-50%, -50%) var(--peripheral-view-transform, scale(var(--peripheral-view-scale))) !important;
   transform-origin: center center;
 }
 
 /* Ambient light for YouTube も同じ要素に transform を指定するため !important で上書きする */
 .peripheral-view-on .html5-main-video {
-  transform: scale(var(--peripheral-view-scale)) !important;
+  transform: var(--peripheral-view-transform, scale(var(--peripheral-view-scale))) !important;
   transform-origin: center center !important;
 }
 
@@ -28,14 +29,14 @@
 }
 
 .peripheral-view-on .ytp-caption-window-container {
-  transform: scale(var(--peripheral-view-scale));
+  transform: var(--peripheral-view-transform, scale(var(--peripheral-view-scale)));
 }
 
 /* bilibili は映像、弾幕、字幕をそれぞれ縮小する */
 .peripheral-view-on .bpx-player-video-perch,
 .peripheral-view-on .bpx-player-row-dm-wrap,
 .peripheral-view-on .bpx-player-subtitle-wrap {
-  transform: scale(var(--peripheral-view-scale));
+  transform: var(--peripheral-view-transform, scale(var(--peripheral-view-scale)));
   transform-origin: center center;
 }
 
@@ -104,4 +105,27 @@
 
 .peripheral-view-button[aria-pressed='true'] svg path {
   fill: #4fc3f7;
+}
+
+/* お知らせ。全画面でも見えるようプレーヤーの中に出す */
+.peripheral-view-message {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  z-index: 81;
+  box-sizing: border-box;
+  max-width: min(560px, calc(100% - 32px));
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(24, 24, 24, 0.92);
+  color: #f1f1f1;
+  font: 14px/1.6 system-ui, sans-serif;
+  white-space: pre-line;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+body > .peripheral-view-message {
+  position: fixed;
+  z-index: 2147483647;
 }
