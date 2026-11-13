@@ -7,6 +7,9 @@ globalThis.PERIPHERAL_VIEW_CONNECTED = () => Boolean(PERIPHERAL_VIEW_API.runtime
 globalThis.PERIPHERAL_VIEW_DEFAULTS = Object.freeze({
   seat: 'front',
   screens: 'three',
+  look: 'classic', // classic: 標準（従来）、theater: 劇場（座席・床・天井を映画館のように描く）
+  theaterSeat: '', // 「劇場」で目線にする席（座席表で選ぶ。例：G-11）。空なら「席の位置」から決める
+  renderMode: 'classic', // classic: 端の色を延ばす（従来）、motion: 動きに追従
   average: 'uniform',
   videoRatio: 'original',
   screenRatio: 'original',
@@ -15,6 +18,9 @@ globalThis.PERIPHERAL_VIEW_DEFAULTS = Object.freeze({
   strip: 0.08, // 映像の端から平均する幅（映像の幅に対する比率）
   blurRange: 0.1, // ぼかす範囲（映像の高さに対する比率）
   brightness: 1, // 壁の明るさ
+  motion: 1, // 「動きに追従」で、カメラの動きに合わせて映像を壁へ流す強さ
+  persistence: 0.7, // 「動きに追従」で、壁へ流れた映像が残る長さ
+  continuity: 1, // 「動きに追従」で、端へ向かって連続している部分をぼかさず端まで描く強さ
 });
 
 // distance は前方席を1とした、スクリーンまでの距離

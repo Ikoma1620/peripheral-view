@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "peripheral-view",
-  "version": "0.5.0",
+  "version": "0.8.0",
   "description": "YouTube、ニコニコ動画、bilibiliの映像を周囲の壁へ投影し、映画館の多面上映のような3D空間で視聴します。",
   "browser_specific_settings": {
     "gecko": {
       "id": "peripheral-view@extension",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
@@ -17,7 +19,9 @@
     "96": "icons/icon-96.png",
     "128": "icons/icon-128.png"
   },
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "action": {
     "default_title": "peripheral-viewの設定",
     "default_popup": "popup/popup.html",
@@ -26,12 +30,41 @@
       "32": "icons/icon-32.png"
     }
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "theaters/theater-7.json"
+      ],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://www.nicovideo.jp/*",
+        "https://www.bilibili.com/*"
+      ]
+    }
+  ],
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*", "https://www.nicovideo.jp/*", "https://www.bilibili.com/*"],
-      "exclude_matches": ["https://www.youtube.com/live_chat*"],
-      "js": ["src/settings.js", "src/sites.js", "src/controls.js", "src/renderer.js", "src/content.js"],
-      "css": ["src/controls.css", "src/content.css"],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://www.nicovideo.jp/*",
+        "https://www.bilibili.com/*"
+      ],
+      "exclude_matches": [
+        "https://www.youtube.com/live_chat*"
+      ],
+      "js": [
+        "src/settings.js",
+        "src/sites.js",
+        "src/controls.js",
+        "src/theater.js",
+        "src/motion.js",
+        "src/renderer.js",
+        "src/content.js"
+      ],
+      "css": [
+        "src/controls.css",
+        "src/content.css"
+      ],
       "run_at": "document_idle"
     }
   ]
